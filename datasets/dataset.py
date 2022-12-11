@@ -168,37 +168,36 @@ class Resample:
                 img = cv2.imread(src)
                 f.write(info)
                 cv2.imwrite(os.path.join('data', self.data, 'image/resample', info.split()[0]), img)
-                # height, width = img.shape[0], img.shape[1]
-                # landmark = np.array(info.strip().split()[2:], dtype=np.float32).reshape(4, 2)
-                # landmark[:, 0] *= width
-                # landmark[:, 1] *= height
-                # ground_image_info = random.choice(self.info_per_class[image_label])
-                # ground_image = cv2.imread(os.path.join('data', self.data, 'image', ground_image_info.split()[0]))
-                # ground_image = cv2.resize(ground_image, (width, height))
-                # landmark_g = np.array(ground_image_info.strip().split()[2:], dtype=np.float32).reshape(4, 2)
-                # landmark_g[:, 0] *= width
-                # landmark_g[:, 1] *= height
-                # delta_x = max(1, math.floor(random_seed*width))
-                # delta_y = max(1, math.floor(random_seed*height))
-                # for i in range(landmark.shape[0]):
-                #     ground = copy.deepcopy(ground_image[max(0, math.floor(landmark_g[i][1])-delta_x):min(height, math.floor(landmark_g[i][1])+delta_x), max(0, math.floor(landmark_g[i][0])-delta_y):min(width, math.floor(landmark_g[i][0])+delta_y)])
-                #     predict = img[max(0, math.floor(landmark[i][1])-delta_x):min(height, math.floor(landmark[i][1])+delta_x), max(0, math.floor(landmark[i][0])-delta_y):min(width, math.floor(landmark[i][0])+delta_y)]
-                #     if predict.shape != ground.shape:
-                #         try:
-                #             predict = cv2.resize(predict, (ground.shape[1], ground.shape[0]))
-                #         except:
-                #             a = 1
-                #     ground_image[max(0, math.floor(landmark_g[i][1])-delta_x):min(height, math.floor(landmark_g[i][1])+delta_x), max(0, math.floor(landmark_g[i][0])-delta_y):min(width, math.floor(landmark_g[i][0])+delta_y)] = predict
-                #
-                # new_name =str(ground_image_info.split('.')[0]) + '_' + info.split('.')[0] + '_' + str(random_seed) + '.jpg'
-                # try:
-                #     f.write(new_name+ground_image_info.split('.jpg')[1])
-                # except:
-                #     f.write(new_name+ground_image_info.split('.png')[1])
-                # cv2.imwrite(os.path.join('data', self.data, 'image/resample', new_name), ground_image)
+                height, width = img.shape[0], img.shape[1]
+                landmark = np.array(info.strip().split()[2:], dtype=np.float32).reshape(4, 2)
+                landmark[:, 0] *= width
+                landmark[:, 1] *= height
+                ground_image_info = random.choice(self.info_per_class[image_label])
+                ground_image = cv2.imread(os.path.join('data', self.data, 'image', ground_image_info.split()[0]))
+                ground_image = cv2.resize(ground_image, (width, height))
+                landmark_g = np.array(ground_image_info.strip().split()[2:], dtype=np.float32).reshape(4, 2)
+                landmark_g[:, 0] *= width
+                landmark_g[:, 1] *= height
+                delta_x = max(1, math.floor(random_seed*width))
+                delta_y = max(1, math.floor(random_seed*height))
+                for i in range(landmark.shape[0]):
+                    ground = copy.deepcopy(ground_image[max(0, math.floor(landmark_g[i][1])-delta_x):min(height, math.floor(landmark_g[i][1])+delta_x), max(0, math.floor(landmark_g[i][0])-delta_y):min(width, math.floor(landmark_g[i][0])+delta_y)])
+                    predict = img[max(0, math.floor(landmark[i][1])-delta_x):min(height, math.floor(landmark[i][1])+delta_x), max(0, math.floor(landmark[i][0])-delta_y):min(width, math.floor(landmark[i][0])+delta_y)]
+                    if predict.shape != ground.shape:
+                        try:
+                            predict = cv2.resize(predict, (ground.shape[1], ground.shape[0]))
+                        except:
+                            a = 1
+                    ground_image[max(0, math.floor(landmark_g[i][1])-delta_x):min(height, math.floor(landmark_g[i][1])+delta_x), max(0, math.floor(landmark_g[i][0])-delta_y):min(width, math.floor(landmark_g[i][0])+delta_y)] = predict
+
+                new_name =str(ground_image_info.split('.')[0]) + '_' + info.split('.')[0] + '_' + str(random_seed) + '.jpg'
+                try:
+                    f.write(new_name+ground_image_info.split('.jpg')[1])
+                except:
+                    f.write(new_name+ground_image_info.split('.png')[1])
+                cv2.imwrite(os.path.join('data', self.data, 'image/resample', new_name), ground_image)
         f.close()
-        self.count[image_label] += 1
-        # self.count[image_label] += 2
+        self.count[image_label] += 2
 
 
 class dataset(Dataset):
@@ -218,10 +217,7 @@ class dataset(Dataset):
         self.train_file = os.path.join(root, 'train_with_landmark.txt')
         self.val_file = os.path.join(root, 'val_with_landmark.txt')
         self.resample_file = os.path.join(root, 'all_with_landmark.txt')
-        # self.resample_file = os.path.join(root, 'train_with_landmark_temp.txt')
         self.extension_file = os.path.join(root, 'resample.txt')
-        self.pretrain_train = os.path.join(root, 'train_val.txt')
-        self.pretrain_val = os.path.join(root, 'val.txt')
         self.num_labeled = args.label_num
         if self.data != 'Pretrain':
             f = open(self.train_file)
@@ -240,10 +236,6 @@ class dataset(Dataset):
     def get_resample(self):
         dataloader = self.resample_loader()
         return dataloader
-
-    def get_pretrain(self):
-        dataloader_t, dataloader_v = self.pretrain_data_loader()
-        return dataloader_t, dataloader_v
 
     def get_pernum(self):
         label = 0
@@ -288,15 +280,6 @@ class dataset(Dataset):
 
         return dataloader
 
-    def pretrain_data_loader(self):
-        imgs, labels, val_imgs, val_labels = self.load_data('pretrain')
-        data = pretrain_set(imgs, labels)
-        dataloader_t = DataLoader(data, batch_size=self.batch_size, shuffle=True,
-                                  drop_last=True, num_workers=self.num_workers, pin_memory=True)
-        data = pretrain_set(val_imgs, val_labels)
-        dataloader_v = DataLoader(data, batch_size=self.batch_size, shuffle=False,
-                                drop_last=False, num_workers=self.num_workers, pin_memory=True)
-        return dataloader_t, dataloader_v
 
     def load_data(self, flag='labeled'):
         imgs, labels, landmarks, info = [], [], [], []
@@ -350,31 +333,6 @@ class dataset(Dataset):
                 landmarks.append(landmark)
 
             return imgs, info, landmarks
-        elif flag == 'pretrain':
-            f = open(self.pretrain_train)
-            file = f.readlines()
-            f.close()
-            for line in file:
-                try:
-                    data = cv2.cvtColor(cv2.imread(os.path.join(self.train_path, line.split()[0])), cv2.COLOR_BGR2RGB)
-                except:
-                    print(line)
-                    continue
-                imgs.append(data)
-                labels.append(int(line.split()[1]))
-            val_imgs, val_labels = [], []
-            f = open(self.pretrain_val)
-            file = f.readlines()
-            f.close()
-            for line in file:
-                try:
-                    data = cv2.cvtColor(cv2.imread(os.path.join(self.train_path, line.split()[0])), cv2.COLOR_BGR2RGB)
-                except:
-                    print(line)
-                    continue
-                val_imgs.append(data)
-                val_labels.append(int(line.split()[1]))
-            return imgs, labels, val_imgs, val_labels
         else:
             f = open(self.val_file)
             file = f.readlines()

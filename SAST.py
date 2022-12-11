@@ -43,11 +43,9 @@ def train(data_loader_x, data_loader_u, criterion, criterion_u, model, epoch, op
         image = torch.cat([img_weak_x, img_weak_u, img_strong_u], dim=0).cuda()
         landmark = torch.cat([landmark_weak_x, landmark_weak_u, landmark_strong_u], dim=0).cuda()
         with amp_cm():
-            # logits = model(image)
             logits, d, feature = model(image, landmark)
             logits_weak_x = logits[:args.batch_size]
             logits_weak_u, logits_strong_u = torch.split(logits[args.batch_size:], args.mu * args.batch_size)
-            # mask_l = mask_l[args.batch_size: args.batch_size * 2]
             loss_x = criterion(logits_weak_x, label_x)
 
             with torch.no_grad():
@@ -56,15 +54,12 @@ def train(data_loader_x, data_loader_u, criterion, criterion_u, model, epoch, op
                 mask_h = (scores.ge(args.thr)).float()
                 mask_s = entropy(probs.detach().cpu(), axis=1) > args.thr_e
                 mask_s = (torch.tensor(mask_s).cuda() & scores.ge(args.thr_l) & scores.le(args.thr)).float()
-                # mask_s = (mask_s & mask_h).float()
                 correct = (label_u_guess == label_u_true).sum().cpu().item()
             loss_u = (criterion_u(logits_strong_u, label_u_guess) * mask_h).mean()
             if torch.sum(mask_h) > 1:
                 loss_u += (criterion_soft(logits_strong_u, probs) * mask_s).mean()
             loss = loss_x + args.lambda_mu*loss_u - args.alpha*min(d, args.beta*(loss_x+loss_u)) + criterion_center(feature[:args.batch_size], label_x) * args.center
-            # loss = loss_x + args.lambda_mu*loss_u - args.alpha*min(d, args.beta*(loss_x+loss_u))
-        # if epoch < 10:
-        #     optimizer.param_groups[0]['lr'] = (epoch+1) * 1e-4
+
         cur_lr = optimizer.param_groups[0]['lr']
         optimizer.zero_grad()
         if args.amp:
@@ -108,7 +103,6 @@ def evaluate(dataloader, criterion, model):
             img, landmark = img.cuda(), landmark.cuda()
             label = torch.as_tensor(label, dtype=torch.long).cuda()
 
-            # logits = model(img)
             logits, _, _ = model(img, landmark)
             loss = criterion(logits, label)
             probs = torch.softmax(logits, dim=1)
@@ -127,7 +121,6 @@ def evaluate(dataloader, criterion, model):
 def resample(model, dataloader, resampler, args):
     model.eval()
     infos, labels, scores = [], [], []
-    # thrs = torch.zeros(n_class)
     with torch.no_grad():
         for i, (img, info) in enumerate(dataloader):
             img, landmark = img[0], img[1]
@@ -170,9 +163,6 @@ def main():
     # model
     parser.add_argument('--model', default='new', type=str)
     parser.add_argument('--model_path', default='resnet18_msceleb.pth')
-    # parser.add_argument('--model_path', default='output/model/2022_11_05_01_01_41_Pretrain/model')
-    parser.add_argument('--model_path1', default='')
-    # parser.add_argument('--model_path1', default='output/model/2022_11_15_22_17_33_FERPlus_-1/model')
     parser.add_argument('--ema_alpha', default=0.999, type=float)
     parser.add_argument('--dropout', default=0.5, type=float)
     # solver
@@ -189,7 +179,7 @@ def main():
     parser.add_argument('--thr_l', default=0.35, type=float, help='threshold for logits low mask')
     parser.add_argument('--lambda_mu', default=2.5, type=float, help='unlabeled weight')
     parser.add_argument('--thr_r', default=0.2, type=float, help='threshold for resample')
-    parser.add_argument('--resample_rate', default=100, type=int, help='the number of resample times')
+    parser.add_argument('--resample_rate', default=5, type=int, help='the number of resample times')
     parser.add_argument('--alpha', default=0.1, type=float, help='weight for distance loss0.1')
     parser.add_argument('--beta', default=0.2, type=float, help='distance0.2')
     parser.add_argument('--lambda_pb', default=0.1, type=float, help='weight of PB feature0.1')

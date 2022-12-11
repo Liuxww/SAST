@@ -239,39 +239,16 @@ class SAST(nn.Module):
     def __init__(self, args):
         super(SAST, self).__init__()
         self.drop_rate = args.dropout
-        self.backbone = models.resnet18(False)
-        # self.backbone = ResNet(BasicBlock, [2, 2, 2, 2], args.n_class)
+        self.backbone = ResNet(BasicBlock, [2, 2, 2, 2], args.n_class)
         out_dim = list(self.backbone.children())[-1].in_features  # original fc layer's in dimention 512
         dim = out_dim + out_dim//2
         if args.model_path:
             self.pretrain = args.model_path
             self.load_pretrain()
         self.backbone.fc = nn.Linear(out_dim, args.n_class)  # new fc layer 512x7
-        # self.upsample_conv = nn.Conv2d(in_channels=dim, out_channels=dim//2, kernel_size=1, stride=1, bias=False)
-        # self.maxpool3 = nn.MaxPool2d(kernel_size=3, stride=1, padding=1)
-        # self.maxpool5 = nn.MaxPool2d(kernel_size=5, stride=1, padding=2)
         self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
-        # self.bottleneck = nn.Sequential(
-            # nn.Conv2d(in_channels=dim, out_channels=dim//2, kernel_size=1, stride=1, bias=False),
-            # nn.BatchNorm2d(dim//2, momentum=0.01),
-            # nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            # nn.Conv2d(in_channels=dim, out_channels=dim, kernel_size=3, stride=2, padding=1, bias=False),
-            # nn.BatchNorm2d(dim, momentum=0.01),
-            # nn.LeakyReLU(negative_slope=0.1, inplace=True),
-            # nn.Conv2d(in_channels=dim//2, out_channels=dim, kernel_size=1, stride=1, bias=False),
-        # )
-        # self.land = nn.Linear(fc_in_dim+int(fc_in_dim/2), args.n_class)
-        # self.land_fc = nn.Sequential(
-        #     nn.Linear(dim, dim // 2),
-        #     nn.LeakyReLU(),
-        #     nn.Dropout(self.drop_rate),
-        #     nn.Linear(dim // 2, dim // 2),
-        #     nn.LeakyReLU(),
-        #     nn.Dropout(self.drop_rate),
-        #     nn.Linear(dim // 2, out_dim),
-        #     nn.LeakyReLU()
-        # )
+
         self.land_fc = nn.Sequential(
             nn.Linear(dim, dim // 2),
             nn.Dropout(self.drop_rate),
@@ -289,20 +266,8 @@ class SAST(nn.Module):
 
     def load_pretrain(self):
         state_dict = torch.load(self.pretrain)['state_dict']
-        # state_dict = torch.load(self.pretrain)
         self.backbone.load_state_dict(state_dict)
-        # new_dict = {}
-        # model_dict = self.backbone.state_dict()
-        #
-        # for k, _ in model_dict.items():
-        #     # if 'fc' in k:
-        #     #     continue
-        #     #     if k in pretrained_dict:
-        #     #         new_dict[k] = pretrained_dict[k]
-        #     if k in state_dict:
-        #         new_dict[k] = state_dict[k]
-        # model_dict.update(new_dict)
-        # self.backbone.load_state_dict(model_dict)
+
 
     def _upsample_cat(self, x, y):
         _, _, H, W = y.size()
@@ -327,20 +292,15 @@ class SAST(nn.Module):
         feature = self._upsample_cat(o4, o3)
         feature = self.avgpool(feature) + self.maxpool(feature)
         feature = self.relu(self.bn(feature))
-        # feature = self.bottleneck(feature)
         feature = feature.view(feature.size(0), feature.size(1), -1)
         re, le, rm, lm = one_hot(landmark[:, 0], feature.size(-1)), one_hot(landmark[:, 1], feature.size(-1)), one_hot(landmark[:, 2], feature.size(-1)), one_hot(landmark[:, 3], feature.size(-1))
         re, le, rm, lm = feature@re.unsqueeze(-1), feature@le.unsqueeze(-1), feature@rm.unsqueeze(-1), feature@lm.unsqueeze(-1)
-        # mask_l = self.ambiguity(re, le, rm, lm)
         feature = torch.cat([re, le, rm, lm], dim=-1)
         feature = torch.mean(feature, dim=-1)
-        # feature = torch.flatten(self.backbone.avgpool(feature), 1)
         feature = self.land_fc(feature)
         distance = torch.norm((x-feature), p=2) / x.size(1)
         distance += abs(torch.cosine_similarity(x, feature)).mean()
         center_feature = self.prelu_fc1(self.fc1(x*(1-self.lambda_pb) + feature*self.lambda_pb))
-        # center_feature = self.prelu_fc1(self.fc1(x))
         x = (1-self.lambda_center)*self.backbone.forward(x*(1-self.lambda_pb) + feature*self.lambda_pb) + self.lambda_center*self.fc2(center_feature)
-        # x = (1-self.lambda_center)*self.backbone.forward(x) + self.lambda_center*self.fc2(center_feature)
 
-        return x, 0, center_feature
+        return x, distance, center_feature
