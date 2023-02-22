@@ -232,7 +232,7 @@ class ResNet(nn.Module):
         return x, o3, o4
 
     def forward(self, x: Tensor):
-        return self._forward_impl(x)
+        return self.fc(x)
 
 
 class SAST(nn.Module):
