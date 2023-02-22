@@ -1,1 +1,2 @@
 "# SAST" 
+python SAST.py
